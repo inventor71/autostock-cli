@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "autostock": {
+      "type": "local",
+      "command": ["bun", "run", "../src/mcp-server.ts"]
+    }
+  },
+  "permission": {
+    "autostock_steer": "ask",
+    "autostock_steer_read": "allow"
+  }
+}
