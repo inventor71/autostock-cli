@@ -7,6 +7,12 @@
     }
   },
   "permission": {
+    "*": "deny",
+    "read": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "list": "allow",
+    "lsp": "allow",
     "autostock_steer": "ask",
     "autostock_steer_read": "allow"
   }
