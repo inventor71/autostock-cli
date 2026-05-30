@@ -104,6 +104,7 @@ const withBrokenPlugin = testEffect(
 )
 
 afterEach(async () => {
+  delete process.env["AUTOSTOCK_LOCKDOWN"] // F4 lockdown is opt-in; never leak across tests
   await disposeAllInstances()
 })
 
@@ -554,6 +555,43 @@ describe("tool.registry", () => {
       const registry = yield* ToolRegistry.Service
       const ids = yield* registry.ids()
       expect(ids).toContain("cowsay")
+    }),
+  )
+
+  // F4 Unit B (Phase 3): under AUTOSTOCK_LOCKDOWN the registry must COMPILE OUT every
+  // side-effecting builtin — they are absent from the registry, not merely permission-
+  // denied. Asserts absence (the structural guarantee) rather than the deny verdict that
+  // verify-lockdown.ts already covers. Id-agnostic: every surviving builtin must be in the
+  // read-only allowlist, so no side-effect tool can slip through regardless of its id.
+  it.instance("autostock lockdown removes side-effect builtins, keeps read-only", () =>
+    Effect.gen(function* () {
+      process.env["AUTOSTOCK_LOCKDOWN"] = "on"
+      const registry = yield* ToolRegistry.Service
+      const ids = yield* registry.ids()
+
+      // read-only survivors stay
+      expect(ids).toContain("read")
+      expect(ids).toContain("glob")
+      expect(ids).toContain("grep")
+
+      // no surviving builtin is outside the read-only allowlist (custom tools = none here)
+      const allowed = new Set(["invalid", "read", "glob", "grep", "lsp"])
+      for (const id of ids) expect(allowed.has(id)).toBe(true)
+
+      // and the headline mutating/egress tools are concretely gone
+      for (const gone of ["bash", "edit", "write", "task", "webfetch", "websearch", "apply_patch"])
+        expect(ids).not.toContain(gone)
+    }),
+  )
+
+  it.instance("default (no lockdown env) keeps the full builtin toolset", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const ids = yield* registry.ids()
+      // sanity: lockdown is opt-in, so side-effect builtins are present by default
+      expect(ids).toContain("bash")
+      expect(ids).toContain("edit")
+      expect(ids).toContain("write")
     }),
   )
 })

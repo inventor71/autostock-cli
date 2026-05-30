@@ -1,6 +1,13 @@
-// Verifies our shipped opencode.json `permission` against opencode's REAL permission
-// engine (Permission.fromConfig + evaluate) — deterministic, no LLM/TUI. Run from the
-// fork dir: bun run verify-lockdown.ts
+// Lockdown is defense-in-depth, in TWO layers:
+//   1. PERMISSION (this script): our shipped opencode.json `permission` is checked against
+//      opencode's REAL permission engine (Permission.fromConfig + evaluate) — deterministic,
+//      no LLM/TUI. Run from the fork dir: bun run verify-lockdown.ts
+//   2. COMPILE-TIME REMOVAL (F4 Phase 3): under AUTOSTOCK_LOCKDOWN=on the side-effect builtins
+//      are not registered AT ALL (registry.ts), so opencode's permission bugs (#5894/#6396) are
+//      structurally moot — not merely denied. That ABSENCE guarantee is asserted in
+//      packages/opencode/test/tool/registry.test.ts ("autostock lockdown removes side-effect
+//      builtins"). Run: bun test test/tool/registry.test.ts
+// This script verifies layer 1; the registry test verifies layer 2.
 import { readFileSync } from "node:fs";
 import { evaluate, fromConfig } from "./packages/opencode/src/permission/index.ts";
 

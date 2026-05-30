@@ -56,6 +56,24 @@ import { RuntimeFlags } from "@/effect/runtime-flags"
 
 const log = Log.create({ service: "tool.registry" })
 
+// F4 Unit B (Phase 3) — autostock operator-console lockdown. This is a dedicated
+// trading-steering fork: the console's only mutating capability is the `autostock_steer`
+// MCP tool (human-confirmed, daemon-gated). When lockdown is on we COMPILE OUT every
+// side-effecting builtin (shell/edit/write/task/fetch/search/patch/repo_*) — they are
+// never registered, hence never offered to the model and never reachable, which makes
+// opencode's tool permission bugs (#5894/#6396) structurally moot rather than merely
+// permission-denied (defense-in-depth atop the `"*": "deny"` allowlist in opencode.json).
+// Only read-only builtins survive (read/glob/grep/lsp + the invalid fallback); custom MCP
+// tools (steer) are always exposed via `all()`.
+//
+// OPT-IN via env (read at layer-build time so it is testable per-instance). The console's
+// launch env sets AUTOSTOCK_LOCKDOWN=on; default OFF keeps the upstream test suite and
+// non-trading dev usage of the fork unchanged (the permission default-deny still applies).
+function lockdownEnabled() {
+  const v = process.env["AUTOSTOCK_LOCKDOWN"]
+  return v === "on" || v === "1" || v === "true"
+}
+
 export function webSearchEnabled(providerID: ProviderID, flags = { exa: false, parallel: false }) {
   return providerID === ProviderID.opencode || flags.exa || flags.parallel
 }
@@ -243,27 +261,39 @@ export const layer: Layer.Layer<
           plan: Tool.init(plan),
         })
 
+        // Read-only survivors under lockdown (mirrors opencode.json's allow list).
+        const readOnly = [
+          tool.invalid,
+          tool.read,
+          tool.glob,
+          tool.grep,
+          ...(flags.experimentalLspTool ? [tool.lsp] : []),
+        ]
+        const full = [
+          tool.invalid,
+          ...(questionEnabled ? [tool.question] : []),
+          tool.shell,
+          tool.read,
+          tool.glob,
+          tool.grep,
+          tool.edit,
+          tool.write,
+          tool.task,
+          tool.fetch,
+          tool.todo,
+          tool.search,
+          ...(flags.experimentalScout ? [tool.repo_clone, tool.repo_overview] : []),
+          tool.skill,
+          tool.patch,
+          ...(flags.experimentalLspTool ? [tool.lsp] : []),
+          ...(flags.experimentalPlanMode && flags.client === "cli" ? [tool.plan] : []),
+        ]
+        const lockdown = lockdownEnabled()
+        if (lockdown) log.info("autostock lockdown: side-effect builtins removed from registry")
+
         return {
           custom,
-          builtin: [
-            tool.invalid,
-            ...(questionEnabled ? [tool.question] : []),
-            tool.shell,
-            tool.read,
-            tool.glob,
-            tool.grep,
-            tool.edit,
-            tool.write,
-            tool.task,
-            tool.fetch,
-            tool.todo,
-            tool.search,
-            ...(flags.experimentalScout ? [tool.repo_clone, tool.repo_overview] : []),
-            tool.skill,
-            tool.patch,
-            ...(flags.experimentalLspTool ? [tool.lsp] : []),
-            ...(flags.experimentalPlanMode && flags.client === "cli" ? [tool.plan] : []),
-          ],
+          builtin: lockdown ? readOnly : full,
           task: tool.task,
           read: tool.read,
         }

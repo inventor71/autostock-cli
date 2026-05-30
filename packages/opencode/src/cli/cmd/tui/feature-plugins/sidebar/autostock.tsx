@@ -5,19 +5,34 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 // F4 Unit B (Phase 2) — autostock steering sidebar panel. Reads the daemon's live
-// read-view (steering/snapshot.json, published by Unit A) and shows run-state /
-// market / positions / pending-approvals. Read-only (no order authority); polls the
-// file (no daemon round-trip). Path from STEERING_DIR (same as the MCP server).
+// read-view (steering/snapshot.json) + the event tail (steering/events.jsonl), both
+// published by Unit A, and shows run-state / market / positions / open-orders /
+// pending-approvals / recent events. Read-only (no order authority); polls the files
+// (no daemon round-trip). Paths from STEERING_DIR (same as the MCP server).
 
 const id = "internal:sidebar-autostock"
+const EVENT_TAIL = 5
+
+interface Order {
+  symbol?: string
+  order_id?: string
+  stop_price?: number | null
+  limit_price?: number | null
+}
 
 interface Snap {
   run_state?: { paused?: boolean; entries_halted?: boolean }
   market_open?: boolean
   positions?: Record<string, { qty?: number; avg_entry_price?: number }>
-  open_orders?: unknown[]
+  open_orders?: Order[]
   pending?: unknown[]
   locked_symbols?: Record<string, string | null>
+}
+
+interface Event {
+  ts?: string
+  kind?: string
+  payload?: Record<string, unknown>
 }
 
 function readSnap(): Snap | null {
@@ -30,9 +45,94 @@ function readSnap(): Snap | null {
   }
 }
 
+// Tail the append-only event log, torn-line-safe: drop an incomplete trailing line
+// (a write may be mid-flight) and parse only the last EVENT_TAIL complete records.
+function readEvents(): Event[] {
+  const dir = process.env.STEERING_DIR
+  if (!dir) return []
+  let text: string
+  try {
+    text = readFileSync(join(dir, "events.jsonl"), "utf8")
+  } catch {
+    return []
+  }
+  const lines = text.split("\n")
+  if (!text.endsWith("\n")) lines.pop() // trailing partial write — not yet complete
+  const complete = lines.filter((l) => l.trim().length > 0)
+  const out: Event[] = []
+  for (const line of complete.slice(-EVENT_TAIL)) {
+    try {
+      out.push(JSON.parse(line) as Event)
+    } catch {
+      // skip a corrupt/partial record without dropping the rest
+    }
+  }
+  return out
+}
+
+// A generous safety bound only — the event <text> uses wrapMode="word", so normal
+// lines wrap to the sidebar width and show in full (no "…" truncation). This just keeps
+// a pathological mega-payload from wrapping into dozens of lines.
+const LINE_MAX = 160
+
+function clip(s: string, max = LINE_MAX): string {
+  const t = s.trimEnd()
+  return t.length > max ? t.slice(0, max - 1) + "…" : t
+}
+
+function hhmm(ts?: string): string {
+  if (!ts) return ""
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return ""
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")} `
+}
+
+// A leading status glyph so the operator can scan outcomes at a glance instead of
+// reading JSON: ✓ done/accepted, · deferred/queued/pending, ✗ rejected/denied/error.
+// All width-1 (no emoji) to keep the narrow sidebar aligned across terminals.
+function outcomeGlyph(o: string): string {
+  if (/reject|deny|denied|error|fail|invalid|bad/i.test(o)) return "✗"
+  if (/defer|queue|pending|await|wait/i.test(o)) return "·"
+  return "✓"
+}
+
+function str(v: unknown): string {
+  return v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v)
+}
+
+// Render one event as a compact human line (no raw JSON). Falls back to `key=val`
+// pairs for kinds we don't special-case, which still reads far better than a JSON blob.
+function eventLine(e: Event): string {
+  const t = hhmm(e.ts)
+  const p = e.payload ?? {}
+  switch (e.kind) {
+    case "outcome": {
+      const o = str(p["outcome"]) || "?"
+      const detail = str(p["detail"])
+      return clip(`${t}${outcomeGlyph(o)} ${o}${detail ? ` · ${detail}` : ""}`)
+    }
+    case "agent_question":
+      return clip(`${t}? ${str(p["symbol"])}: ${str(p["text"])}`)
+    case "fill":
+      return clip(`${t}• fill ${str(p["symbol"])} ${str(p["qty"])}@${str(p["price"])}`)
+    case "lifecycle":
+      return clip(`${t}${str(p["state"]) || "lifecycle"}${p["detail"] ? ` · ${str(p["detail"])}` : ""}`)
+    default: {
+      const kv = Object.entries(p)
+        .map(([k, v]) => `${k}=${str(v)}`)
+        .join(" ")
+      return clip(`${t}${e.kind ?? "?"}${kv ? ` ${kv}` : ""}`)
+    }
+  }
+}
+
 function View(props: { api: TuiPluginApi }) {
   const [snap, setSnap] = createSignal<Snap | null>(readSnap())
-  const timer = setInterval(() => setSnap(readSnap()), 1500)
+  const [events, setEvents] = createSignal<Event[]>(readEvents())
+  const timer = setInterval(() => {
+    setSnap(readSnap())
+    setEvents(readEvents())
+  }, 1500)
   onCleanup(() => clearInterval(timer))
 
   const theme = () => props.api.theme.current
@@ -44,6 +144,7 @@ function View(props: { api: TuiPluginApi }) {
     return "RUNNING"
   }
   const positions = () => Object.entries(snap()?.positions ?? {})
+  const orders = () => snap()?.open_orders ?? []
   const pendingN = () => (snap()?.pending ?? []).length
 
   return (
@@ -69,6 +170,28 @@ function View(props: { api: TuiPluginApi }) {
             </text>
           )}
         </For>
+        <Show when={orders().length > 0}>
+          <text fg={theme().textMuted}>orders</text>
+          <For each={orders()}>
+            {(o) => (
+              <text fg={theme().text}>
+                {o.symbol ?? "?"}
+                {o.stop_price != null ? ` stop=${o.stop_price}` : ""}
+                {o.limit_price != null ? ` lim=${o.limit_price}` : ""}
+              </text>
+            )}
+          </For>
+        </Show>
+        <Show when={events().length > 0}>
+          <text fg={theme().textMuted}>events</text>
+          <For each={events()}>
+            {(e) => (
+              <text fg={theme().text} wrapMode="word">
+                {eventLine(e)}
+              </text>
+            )}
+          </For>
+        </Show>
       </box>
     </Show>
   )
