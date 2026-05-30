@@ -20,12 +20,19 @@ interface Order {
   limit_price?: number | null
 }
 
+interface QueuedTrade {
+  id?: string
+  verb?: string
+  args?: { symbol?: string; size?: number; unit?: string }
+}
+
 interface Snap {
   run_state?: { paused?: boolean; entries_halted?: boolean }
   market_open?: boolean
   positions?: Record<string, { qty?: number; avg_entry_price?: number }>
   open_orders?: Order[]
   pending?: unknown[]
+  queued_trades?: QueuedTrade[]
   locked_symbols?: Record<string, string | null>
 }
 
@@ -145,7 +152,14 @@ function View(props: { api: TuiPluginApi }) {
   }
   const positions = () => Object.entries(snap()?.positions ?? {})
   const orders = () => snap()?.open_orders ?? []
+  const queued = () => snap()?.queued_trades ?? []
   const pendingN = () => (snap()?.pending ?? []).length
+
+  const queuedLine = (q: QueuedTrade): string => {
+    const a = q.args ?? {}
+    const sized = a.size != null ? ` ${a.size}${a.unit ?? ""}` : ""
+    return `${q.verb ?? "?"} ${a.symbol ?? "?"}${sized}  ${(q.id ?? "").slice(0, 8)}`
+  }
 
   return (
     <Show when={snap()}>
@@ -180,6 +194,12 @@ function View(props: { api: TuiPluginApi }) {
                 {o.limit_price != null ? ` lim=${o.limit_price}` : ""}
               </text>
             )}
+          </For>
+        </Show>
+        <Show when={queued().length > 0}>
+          <text fg={theme().textMuted}>queued (next open) · /cancel by id</text>
+          <For each={queued()}>
+            {(q) => <text fg={theme().text}>{queuedLine(q)}</text>}
           </For>
         </Show>
         <Show when={events().length > 0}>
