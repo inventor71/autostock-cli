@@ -31,6 +31,19 @@ interface QueuedTrade {
   args?: { symbol?: string; size?: number; unit?: string }
 }
 
+interface Account {
+  equity?: number
+  cash?: number
+  open_pnl?: number
+  position_count?: number
+}
+
+interface RoundTrip {
+  closed_count?: number
+  win_rate?: number | null
+  realized_pnl?: number
+}
+
 interface Snap {
   run_state?: { paused?: boolean; entries_halted?: boolean }
   market_open?: boolean
@@ -39,6 +52,8 @@ interface Snap {
   pending?: unknown[]
   queued_trades?: QueuedTrade[]
   locked_symbols?: Record<string, string | null>
+  account?: Account // F6 FR-2
+  round_trip?: RoundTrip // F6 FR-3
 }
 
 interface Event {
@@ -138,6 +153,17 @@ function eventLine(e: Event): string {
   }
 }
 
+// F6 — compact money / signed-P&L formatting for the account + performance blocks.
+function fmtMoney(n?: number): string {
+  if (n == null || !Number.isFinite(n)) return "—"
+  return (n < 0 ? "-$" : "$") + Math.abs(Math.round(n)).toLocaleString("en-US")
+}
+
+function fmtPnl(n?: number): string {
+  if (n == null || !Number.isFinite(n)) return "—"
+  return (n >= 0 ? "+$" : "-$") + Math.abs(Math.round(n)).toLocaleString("en-US")
+}
+
 function View(props: { api: TuiPluginApi }) {
   const [snap, setSnap] = createSignal<Snap | null>(readSnap())
   const [events, setEvents] = createSignal<Event[]>(readEvents())
@@ -172,6 +198,9 @@ function View(props: { api: TuiPluginApi }) {
   const orders = () => snap()?.open_orders ?? []
   const queued = () => snap()?.queued_trades ?? []
   const pendingN = () => (snap()?.pending ?? []).length
+  const account = () => snap()?.account
+  const rt = () => snap()?.round_trip
+  const pnlColor = (n?: number) => ((n ?? 0) >= 0 ? theme().success : theme().error)
 
   const queuedLine = (q: QueuedTrade): string => {
     const a = q.args ?? {}
@@ -198,6 +227,36 @@ function View(props: { api: TuiPluginApi }) {
               {snap()?.market_open ? " · MKT OPEN" : " · MKT CLOSED"}
             </text>
           </box>
+        {/* F6 FR-2/5 — account summary (hidden until the daemon publishes it, BR-8). */}
+        <Show when={account()}>
+          {(a) => (
+            <box flexDirection="row" gap={1}>
+              <text fg={theme().textMuted}>eq</text>
+              <text fg={theme().text}>{fmtMoney(a().equity)}</text>
+              <text fg={theme().textMuted}>cash</text>
+              <text fg={theme().text}>{fmtMoney(a().cash)}</text>
+              <text fg={theme().textMuted}>pnl</text>
+              <text fg={pnlColor(a().open_pnl)}>{fmtPnl(a().open_pnl)}</text>
+            </box>
+          )}
+        </Show>
+        {/* F6 FR-3/5 — today's realized round-trip performance (empty state when none). */}
+        <Show when={rt()}>
+          {(r) => (
+            <Show
+              when={(r().closed_count ?? 0) > 0}
+              fallback={<text fg={theme().textMuted}>today · no closed trades</text>}
+            >
+              <box flexDirection="row" gap={1}>
+                <text fg={theme().textMuted}>today</text>
+                <text fg={theme().text}>
+                  W {Math.round((r().win_rate ?? 0) * 100)}% ({r().closed_count})
+                </text>
+                <text fg={pnlColor(r().realized_pnl)}>{fmtPnl(r().realized_pnl)}</text>
+              </box>
+            </Show>
+          )}
+        </Show>
         <Show when={pendingN() > 0}>
           <text fg={theme().text}>pending approvals: {pendingN()} — /pending</text>
         </Show>

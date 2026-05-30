@@ -1,6 +1,7 @@
 import { useProject } from "@tui/context/project"
 import { useSync } from "@tui/context/sync"
-import { createMemo, Show } from "solid-js"
+import { createMemo, createSignal, Show } from "solid-js"
+import { useTerminalDimensions } from "@opentui/solid"
 import { useTheme } from "../../context/theme"
 import { useTuiConfig } from "../../context/tui-config"
 import { InstallationChannel, InstallationVersion } from "@opencode-ai/core/installation/version"
@@ -8,14 +9,11 @@ import { TuiPluginRuntime } from "@/cli/cmd/tui/plugin/runtime"
 
 import { getScrollAcceleration } from "../../util/scroll"
 import { WorkspaceLabel } from "../../component/workspace-label"
-
-// F4 Unit B — sidebar width. Fixed (42) upstream; this fork makes it overridable via env
-// so the trading console's wider event/order text fits without a full resize UX. A proper
-// mouse-drag resize is deferred to a separate feature. Read once at render (env is static).
-export function sidebarWidth(): number {
-  const n = Number(process.env["AUTOSTOCK_SIDEBAR_WIDTH"])
-  return Number.isFinite(n) && n >= 24 && n <= 120 ? Math.floor(n) : 42
-}
+// F6 — sidebarWidth is now a shared reactive signal (drag-resizable + persisted).
+// Re-exported here so existing `import { sidebarWidth } from "./sidebar"` (index.tsx)
+// keeps working; the value lives in sidebar-width.ts.
+import { setSidebarWidth, sidebarWidth } from "./sidebar-width"
+export { sidebarWidth }
 
 export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const project = useProject()
@@ -29,6 +27,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     return project.workspace.get(workspaceID)
   }
   const scrollAcceleration = createMemo(() => getScrollAcceleration(tuiConfig))
+  const dimensions = useTerminalDimensions()
+  const [dragging, setDragging] = createSignal(false)
 
   return (
     <Show when={session()}>
@@ -42,6 +42,26 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
         paddingRight={2}
         position={props.overlay ? "absolute" : "relative"}
       >
+        {/* F6 — drag-resize grab strip on the sidebar's LEFT edge. selectable=false is
+            REQUIRED (critic #2): OpenTUI defaults selectable=true, and a down on a
+            selectable element starts a text selection that swallows onMouseDrag. The
+            sidebar sits on the right, so width = terminalWidth − cursorColumn. */}
+        <box
+          position="absolute"
+          left={0}
+          top={0}
+          bottom={0}
+          width={1}
+          selectable={false}
+          backgroundColor={dragging() ? theme.borderActive : theme.border}
+          onMouseDown={(e) => {
+            setDragging(true)
+            e.stopPropagation()
+          }}
+          onMouseDrag={(e) => setSidebarWidth(dimensions().width - e.x, dimensions().width)}
+          onMouseDragEnd={() => setDragging(false)}
+        />
+
         <scrollbox
           flexGrow={1}
           scrollAcceleration={scrollAcceleration()}
