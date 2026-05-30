@@ -1,4 +1,5 @@
 {
+  "$schema": "https://opencode.ai/config.json",
   // Project opencode override — wires the autostock steering MCP + the default-deny
   // lockdown. Committed & portable: paths come from {env:AUTOSTOCK_ROOT} and the token
   // from {env:STEERING_OPERATOR_TOKEN} (opencode substitutes {env:...} across the whole
