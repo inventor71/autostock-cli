@@ -250,6 +250,11 @@ const tui: TuiPlugin = async (api) => {
       sidebar_content() {
         return <View api={api} />
       },
+      // F5 option ②: also render the trading panel on the home route, so a fresh launch
+      // (no `-c`) shows the live sidebar from the start without resuming a stale session.
+      home_sidebar() {
+        return <View api={api} />
+      },
     },
   })
 }
