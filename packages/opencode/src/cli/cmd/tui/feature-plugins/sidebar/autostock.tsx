@@ -3,6 +3,7 @@ import type { InternalTuiPlugin } from "../../plugin/internal"
 import { createSignal, For, onCleanup, Show } from "solid-js"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
+import { orderRole, orderTrigger, orderDelta, pnlPct, fmtPct, fmtPrice } from "./sidebar-format"
 
 // F4 Unit B (Phase 2) — autostock steering sidebar panel. Reads the daemon's live
 // read-view (steering/snapshot.json) + the event tail (steering/events.jsonl), both
@@ -23,6 +24,27 @@ interface Order {
   order_id?: string
   stop_price?: number | null
   limit_price?: number | null
+  side?: string // F8: "buy" | "sell"
+  order_type?: string // F8: "limit" | "stop" | "stop_limit" | ... (role derivation)
+  current_price?: number | null // F8: held → position price, else PriceBook (Δ-to-trigger)
+}
+
+// F8: a held position with status.py-rich fields (current price + P&L).
+interface PositionRow {
+  qty?: number
+  avg_entry_price?: number
+  current_price?: number
+  market_value?: number
+  unrealized_pnl?: number
+}
+
+// F8: a recent broker fill (what was bought / sold).
+interface RecentFill {
+  ts?: string
+  side?: string
+  qty?: number
+  symbol?: string
+  price?: number
 }
 
 interface QueuedTrade {
@@ -34,6 +56,7 @@ interface QueuedTrade {
 interface Account {
   equity?: number
   cash?: number
+  invested?: number // F8
   open_pnl?: number
   position_count?: number
 }
@@ -47,13 +70,14 @@ interface RoundTrip {
 interface Snap {
   run_state?: { paused?: boolean; entries_halted?: boolean }
   market_open?: boolean
-  positions?: Record<string, { qty?: number; avg_entry_price?: number }>
+  positions?: Record<string, PositionRow>
   open_orders?: Order[]
   pending?: unknown[]
   queued_trades?: QueuedTrade[]
   locked_symbols?: Record<string, string | null>
   account?: Account // F6 FR-2
   round_trip?: RoundTrip // F6 FR-3
+  recent_fills?: RecentFill[] // F8 FR-3
 }
 
 interface Event {
@@ -235,6 +259,10 @@ function View(props: { api: TuiPluginApi }) {
               <text fg={theme().text}>{fmtMoney(a().equity)}</text>
               <text fg={theme().textMuted}>cash</text>
               <text fg={theme().text}>{fmtMoney(a().cash)}</text>
+              <Show when={a().invested != null}>
+                <text fg={theme().textMuted}>inv</text>
+                <text fg={theme().text}>{fmtMoney(a().invested)}</text>
+              </Show>
               <text fg={theme().textMuted}>pnl</text>
               <text fg={pnlColor(a().open_pnl)}>{fmtPnl(a().open_pnl)}</text>
             </box>
@@ -260,24 +288,64 @@ function View(props: { api: TuiPluginApi }) {
         <Show when={pendingN() > 0}>
           <text fg={theme().text}>pending approvals: {pendingN()} — /pending</text>
         </Show>
+        {/* F8 FR-1/5 — holdings: qty · current price · signed P&L $ + %. The whole row
+            is colored by P&L sign (green up / red down); arrows are in the text. One
+            <text wrapMode="word"> so it wraps when dragged wider (OpenTUI has no inline
+            color span — coloring is per-<text>). */}
         <For each={positions()}>
-          {([sym, p]) => (
-            <text fg={theme().text}>
-              {sym} {String(p?.qty ?? "?")}
-              {snap()?.locked_symbols?.[sym] ? " (locked)" : ""}
-            </text>
-          )}
+          {([sym, p]) => {
+            const pct = pnlPct(p)
+            const hasPnl = p?.unrealized_pnl != null
+            const price = p?.current_price != null ? ` @${fmtPrice(p.current_price)}` : ""
+            const lock = snap()?.locked_symbols?.[sym] ? " (locked)" : ""
+            const pnl = hasPnl
+              ? `  ${fmtPnl(p.unrealized_pnl)}${pct != null ? ` ${fmtPct(pct)}` : ""}`
+              : ""
+            return (
+              <text fg={hasPnl ? pnlColor(p.unrealized_pnl) : theme().text} wrapMode="word">
+                {sym} {String(p?.qty ?? "?")}
+                {price}
+                {lock}
+                {pnl}
+              </text>
+            )
+          }}
         </For>
+        {/* F8 FR-2/5 — resting orders: role · trigger · Δ-to-trigger %. Row colored by Δ
+            direction when we have a current price, else neutral. */}
         <Show when={orders().length > 0}>
           <text fg={theme().textMuted}>orders</text>
           <For each={orders()}>
-            {(o) => (
-              <text fg={theme().text}>
-                {o.symbol ?? "?"}
-                {o.stop_price != null ? ` stop=${o.stop_price}` : ""}
-                {o.limit_price != null ? ` lim=${o.limit_price}` : ""}
-              </text>
-            )}
+            {(o) => {
+              const trig = orderTrigger(o)
+              const d = orderDelta(o)
+              const trigStr = trig != null ? ` ${fmtPrice(trig)}` : ""
+              const dStr = d != null ? `  ${fmtPct(d)}` : ""
+              return (
+                <text fg={d != null ? pnlColor(d) : theme().text} wrapMode="word">
+                  {o.symbol ?? "?"} {orderRole(o)}
+                  {trigStr}
+                  {dStr}
+                </text>
+              )
+            }}
+          </For>
+        </Show>
+        {/* F8 FR-3/5 — recent fills (what was bought / sold): time · side · qty · sym ·
+            price. Row colored by side (BUY green / SELL red). */}
+        <Show when={(snap()?.recent_fills ?? []).length > 0}>
+          <text fg={theme().textMuted}>fills</text>
+          <For each={snap()?.recent_fills ?? []}>
+            {(f) => {
+              const buy = (f.side ?? "").toLowerCase() === "buy"
+              return (
+                <text fg={buy ? theme().success : theme().error} wrapMode="word">
+                  {hhmm(f.ts)}
+                  {(f.side ?? "?").toUpperCase()} {String(f.qty ?? "?")} {f.symbol ?? "?"} @
+                  {fmtPrice(f.price)}
+                </text>
+              )
+            }}
           </For>
         </Show>
         <Show when={queued().length > 0}>

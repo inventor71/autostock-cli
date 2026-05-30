@@ -10,7 +10,10 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 
-export const MIN_SIDEBAR_WIDTH = 24
+// F8: floor raised 24 -> 36 so the status.py-rich one-line rows (symbol · qty · price ·
+// signed P&L%) stay readable instead of collapsing into an unreadable word-wrapped stack
+// at very narrow widths. Drag wider for the fuller multi-field view.
+export const MIN_SIDEBAR_WIDTH = 36
 const FALLBACK_WIDTH = 42
 const MIN_CONTENT = 20 // keep at least this many cols for the main pane
 
