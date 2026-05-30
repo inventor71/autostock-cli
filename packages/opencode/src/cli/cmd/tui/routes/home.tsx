@@ -95,17 +95,12 @@ export function Home() {
           <Toast />
         </box>
         <Show when={wide()}>
-          <box
-            width={sidebarWidth()}
-            flexShrink={0}
-            border={["left"]}
-            paddingLeft={1}
-            paddingRight={1}
-            position="relative"
-          >
-            {/* F6 — drag-resize grab strip on the home sidebar's left border (mirrors the
-                session Sidebar; the same shared width signal, so both views stay in sync).
-                selectable=false so text-selection doesn't swallow onMouseDrag. */}
+          <box width={sidebarWidth()} flexShrink={0} paddingLeft={2} paddingRight={1} position="relative">
+            {/* F6 — drag-resize grab strip = a 1-col OPAQUE bar at the sidebar's left edge,
+                exactly like the session Sidebar (the proven-working pattern). It replaces the
+                old `border:["left"]` (a transparent box over a parent border doesn't hit-test,
+                so the drag never fired on home). selectable=false so text-selection doesn't
+                swallow onMouseDrag; width = terminalWidth − cursorColumn (sidebar is on the right). */}
             <box
               position="absolute"
               left={0}
@@ -113,7 +108,7 @@ export function Home() {
               bottom={0}
               width={1}
               selectable={false}
-              backgroundColor={dragging() ? theme.borderActive : undefined}
+              backgroundColor={dragging() ? theme.borderActive : theme.border}
               onMouseDown={(e) => {
                 setDragging(true)
                 e.stopPropagation()
