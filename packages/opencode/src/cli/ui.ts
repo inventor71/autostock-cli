@@ -2,11 +2,13 @@ import { EOL } from "os"
 import { Schema } from "effect"
 import { logo as glyphs } from "./logo"
 
+// autostock wordmark (non-TTY ascii path; F5 BR-14). Single-line "autostock" in the same
+// half-block letters as the stacked TTY logo (cli/logo.ts).
 const wordmark = [
-  `⠀                                ▄     `,
-  `█▀▀█ █▀▀█ █▀▀█ █▀▀▄ █▀▀▀ █▀▀█ █▀▀█ █▀▀█`,
-  `█  █ █  █ █▀▀▀ █  █ █    █  █ █  █ █▀▀▀`,
-  `▀▀▀▀ █▀▀▀ ▀▀▀▀ ▀  ▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀`,
+  `                                            `,
+  `█▀▀█ █  █ ▀▀▀▀ █▀▀█ ▄▀▀▀ ▀▀▀▀ █▀▀█ █▀▀▀ █  █`,
+  `█▀▀█ █  █  ██  █  █ ▀▀▀▄  ██  █  █ █    ██▀ `,
+  `█  █ ▀▀▀▀  ██  ▀▀▀▀ ▀▀▀▀  ██  ▀▀▀▀ ▀▀▀▀ █  █`,
 ]
 
 export class CancelledError extends Schema.TaggedErrorClass<CancelledError>()("UICancelledError", {}) {}
