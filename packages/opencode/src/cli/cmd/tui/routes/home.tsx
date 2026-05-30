@@ -2,6 +2,8 @@ import { Prompt, type PromptRef } from "@tui/component/prompt"
 import { createEffect, createMemo, createSignal, onMount, Show } from "solid-js"
 import { Logo } from "../component/logo"
 import { sidebarWidth } from "./session/sidebar"
+import { setSidebarWidth } from "./session/sidebar-width"
+import { useTheme } from "../context/theme"
 import { useSync } from "../context/sync"
 import { Toast } from "../ui/toast"
 import { useArgs } from "../context/args"
@@ -28,6 +30,8 @@ export function Home() {
   const local = useLocal()
   const editor = useEditorContext()
   const dimensions = useTerminalDimensions()
+  const { theme } = useTheme()
+  const [dragging, setDragging] = createSignal(false)
   const tuiConfig = useTuiConfig()
   const promptMaxWidth = createMemo(() => {
     const configured = tuiConfig.prompt?.max_width
@@ -91,7 +95,32 @@ export function Home() {
           <Toast />
         </box>
         <Show when={wide()}>
-          <box width={sidebarWidth()} flexShrink={0} border={["left"]} paddingLeft={1} paddingRight={1}>
+          <box
+            width={sidebarWidth()}
+            flexShrink={0}
+            border={["left"]}
+            paddingLeft={1}
+            paddingRight={1}
+            position="relative"
+          >
+            {/* F6 — drag-resize grab strip on the home sidebar's left border (mirrors the
+                session Sidebar; the same shared width signal, so both views stay in sync).
+                selectable=false so text-selection doesn't swallow onMouseDrag. */}
+            <box
+              position="absolute"
+              left={0}
+              top={0}
+              bottom={0}
+              width={1}
+              selectable={false}
+              backgroundColor={dragging() ? theme.borderActive : undefined}
+              onMouseDown={(e) => {
+                setDragging(true)
+                e.stopPropagation()
+              }}
+              onMouseDrag={(e) => setSidebarWidth(dimensions().width - e.x, dimensions().width)}
+              onMouseDragEnd={() => setDragging(false)}
+            />
             <TuiPluginRuntime.Slot name="home_sidebar" />
           </box>
         </Show>
