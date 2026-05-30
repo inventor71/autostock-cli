@@ -16,8 +16,22 @@ import { useTerminalDimensions } from "@opentui/solid"
 import { useTuiConfig } from "../context/tui-config"
 
 let once = false
+// autostock (F7): localize the home prompt examples — Korean locale shows Korean steering
+// examples, everything else English. Detection is best-effort from the shell locale env
+// (the fork has no i18n infra); the example shell commands stay as-is (real shell input).
+const KO = (
+  process.env.LC_ALL ||
+  process.env.LC_MESSAGES ||
+  process.env.LANG ||
+  (typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().locale : "") ||
+  ""
+)
+  .toLowerCase()
+  .startsWith("ko")
 const placeholder = {
-  normal: ["Fix a TODO in the codebase", "What is the tech stack of this project?", "Fix broken tests"],
+  normal: KO
+    ? ["애플 절반 팔아", "신규 진입 중지", "지금 포지션 보여줘"]
+    : ["sell half my AAPL", "pause new entries", "what are my open positions?"],
   shell: ["ls -la", "git status", "pwd"],
 }
 
