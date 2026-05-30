@@ -12,6 +12,11 @@ import { join } from "node:path"
 
 const id = "internal:sidebar-autostock"
 const EVENT_TAIL = 5
+// F5 S6 (BR-8): runtime-disconnect banner. The daemon publishes the snapshot every ~5s; if
+// published_at goes stale past this, the daemon is down/wedged or the channel is broken — surface
+// it loudly instead of a silently-frozen panel. Generous vs the 5s cadence to avoid false alarms
+// during a busy LLM turn (mirrors the launcher's health window rationale).
+const SNAPSHOT_STALE_MS = 30_000
 
 interface Order {
   symbol?: string
@@ -143,6 +148,19 @@ function View(props: { api: TuiPluginApi }) {
   onCleanup(() => clearInterval(timer))
 
   const theme = () => props.api.theme.current
+  // F5 S6 (BR-8): compute a disconnect reason from what the sidebar can observe (channel/snapshot
+  // freshness). published_at is naive-local ISO → new Date() parses it as local (same host).
+  // Secrets are never shown. null = connected.
+  const disconnect = (): string | null => {
+    if (!process.env.STEERING_DIR) return "STEERING_DIR not set — launch via `autostock`"
+    const s = snap()
+    if (!s) return "no snapshot — daemon not publishing (starting up / down?)"
+    const pub = (s as { published_at?: string }).published_at
+    const age = pub ? Date.now() - new Date(pub).getTime() : NaN
+    if (Number.isNaN(age)) return "snapshot has no published_at — channel broken?"
+    if (age > SNAPSHOT_STALE_MS) return `daemon snapshot stale ${Math.round(age / 1000)}s — daemon down/wedged?`
+    return null
+  }
   const runLabel = () => {
     const r = snap()?.run_state
     if (!r) return "?"
@@ -162,17 +180,24 @@ function View(props: { api: TuiPluginApi }) {
   }
 
   return (
-    <Show when={snap()}>
-      <box>
-        <box flexDirection="row" gap={1}>
-          <text fg={theme().text}>
-            <b>autostock</b>
-          </text>
-          <text fg={theme().text}>
-            {runLabel()}
-            {snap()?.market_open ? " · MKT OPEN" : " · MKT CLOSED"}
-          </text>
-        </box>
+    <box>
+      {/* F5 S6: disconnect banner — always evaluated, even when there is no snapshot to show. */}
+      <Show when={disconnect()}>
+        <text fg={theme().text} wrapMode="word">
+          ⚠ {disconnect()}
+        </text>
+      </Show>
+      <Show when={snap()}>
+        <box>
+          <box flexDirection="row" gap={1}>
+            <text fg={theme().text}>
+              <b>autostock</b>
+            </text>
+            <text fg={theme().text}>
+              {runLabel()}
+              {snap()?.market_open ? " · MKT OPEN" : " · MKT CLOSED"}
+            </text>
+          </box>
         <Show when={pendingN() > 0}>
           <text fg={theme().text}>pending approvals: {pendingN()} — /pending</text>
         </Show>
@@ -212,8 +237,9 @@ function View(props: { api: TuiPluginApi }) {
             )}
           </For>
         </Show>
-      </box>
-    </Show>
+        </box>
+      </Show>
+    </box>
   )
 }
 
