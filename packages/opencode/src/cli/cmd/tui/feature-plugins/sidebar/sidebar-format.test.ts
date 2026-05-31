@@ -1,7 +1,7 @@
 // F8 — unit tests for the pure sidebar derivation/format helpers (bun).
 // No solid-js / OpenTUI imports, so this runs without the full submodule install.
 import { expect, test } from "bun:test"
-import { orderRole, orderTrigger, orderDelta, pnlPct, fmtPct, fmtPrice, isUp } from "./sidebar-format"
+import { orderRole, orderTrigger, orderDelta, pnlPct, fmtPct, fmtPrice, isUp, mmdd, fillDatePrefix } from "./sidebar-format"
 
 test("orderRole mirrors status.py _order_role", () => {
   expect(orderRole({ side: "buy", order_type: "limit" })).toBe("entry")
@@ -45,4 +45,26 @@ test("fmtPct has arrow + sign; fmtPrice 2dp; blanks for nullish", () => {
 test("isUp boundary: 0 is up", () => {
   expect(isUp(0)).toBe(true)
   expect(isUp(-0.01)).toBe(false)
+})
+
+// F13 — fills date. ts is naive-local ISO (parsed in local tz, same as hhmm), so
+// MM/DD is deterministic regardless of the runner's timezone.
+test("mmdd formats local MM/DD, blank on bad/empty ts", () => {
+  expect(mmdd("2026-05-31T22:41:00")).toBe("05/31")
+  expect(mmdd("2026-01-05T09:00:00")).toBe("01/05") // zero-padded
+  expect(mmdd(undefined)).toBe("")
+  expect(mmdd("")).toBe("")
+  expect(mmdd("not-a-date")).toBe("")
+})
+
+test("fillDatePrefix shows MM/DD only when the date changes", () => {
+  // first row (no prev) → show date
+  expect(fillDatePrefix("2026-05-31T22:41:00", undefined)).toBe("05/31 ")
+  // prev same date → blank-pad to width of "MM/DD " (6)
+  expect(fillDatePrefix("2026-05-31T22:37:00", "2026-05-31T22:41:00")).toBe("      ")
+  expect(fillDatePrefix("2026-05-31T22:37:00", "2026-05-31T22:41:00")).toHaveLength(6)
+  // prev different date → show date
+  expect(fillDatePrefix("2026-05-30T18:04:00", "2026-05-31T22:41:00")).toBe("05/30 ")
+  // unusable current ts → no prefix at all
+  expect(fillDatePrefix(undefined, "2026-05-31T22:41:00")).toBe("")
 })
