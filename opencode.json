@@ -8,6 +8,12 @@
     "list": "allow",
     "lsp": "allow",
     "autostock_steer": "ask",
-    "autostock_steer_read": "allow"
+    "autostock_steer_read": "allow",
+    "autostock_place_stock_order": "ask",
+    "autostock_cancel_order_by_id": "ask",
+    "autostock_cancel_all_orders": "ask",
+    "autostock_replace_order_by_id": "ask",
+    "autostock_close_position": "ask",
+    "autostock_close_all_positions": "ask"
   }
 }
