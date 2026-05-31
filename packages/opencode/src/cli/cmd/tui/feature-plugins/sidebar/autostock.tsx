@@ -3,7 +3,7 @@ import type { InternalTuiPlugin } from "../../plugin/internal"
 import { createSignal, For, onCleanup, Show } from "solid-js"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { orderRole, orderTrigger, orderDelta, pnlPct, fmtPct, fmtPrice } from "./sidebar-format"
+import { orderRole, orderTrigger, orderDelta, pnlPct, fmtPct, fmtPrice, fillDatePrefix } from "./sidebar-format"
 
 // F4 Unit B (Phase 2) — autostock steering sidebar panel. Reads the daemon's live
 // read-view (steering/snapshot.json) + the event tail (steering/events.jsonl), both
@@ -314,7 +314,8 @@ function View(props: { api: TuiPluginApi }) {
         {/* F8 FR-2/5 — resting orders: role · trigger · Δ-to-trigger %. Row colored by Δ
             direction when we have a current price, else neutral. */}
         <Show when={orders().length > 0}>
-          <text fg={theme().textMuted}>orders</text>
+          {/* F13 — blank line before each section header for visual separation. */}
+          <text fg={theme().textMuted} marginTop={1}>orders</text>
           <For each={orders()}>
             {(o) => {
               const trig = orderTrigger(o)
@@ -331,15 +332,19 @@ function View(props: { api: TuiPluginApi }) {
             }}
           </For>
         </Show>
-        {/* F8 FR-3/5 — recent fills (what was bought / sold): time · side · qty · sym ·
-            price. Row colored by side (BUY green / SELL red). */}
+        {/* F8 FR-3/5 — recent fills (what was bought / sold): date · time · side · qty ·
+            sym · price. Row colored by side (BUY green / SELL red). F13: the list can span
+            days, so prefix the local MM/DD — shown only when it changes vs the previous row
+            (blank-padded otherwise so HH:MM stays aligned). */}
         <Show when={(snap()?.recent_fills ?? []).length > 0}>
-          <text fg={theme().textMuted}>fills</text>
+          <text fg={theme().textMuted} marginTop={1}>fills</text>
           <For each={snap()?.recent_fills ?? []}>
-            {(f) => {
+            {(f, i) => {
               const buy = (f.side ?? "").toLowerCase() === "buy"
+              const prev = i() > 0 ? (snap()?.recent_fills ?? [])[i() - 1] : undefined
               return (
                 <text fg={buy ? theme().success : theme().error} wrapMode="word">
+                  {fillDatePrefix(f.ts, prev?.ts)}
                   {hhmm(f.ts)}
                   {(f.side ?? "?").toUpperCase()} {String(f.qty ?? "?")} {f.symbol ?? "?"} @
                   {fmtPrice(f.price)}
@@ -349,13 +354,13 @@ function View(props: { api: TuiPluginApi }) {
           </For>
         </Show>
         <Show when={queued().length > 0}>
-          <text fg={theme().textMuted}>queued (next open) · /cancel by id</text>
+          <text fg={theme().textMuted} marginTop={1}>queued (next open) · /cancel by id</text>
           <For each={queued()}>
             {(q) => <text fg={theme().text}>{queuedLine(q)}</text>}
           </For>
         </Show>
         <Show when={events().length > 0}>
-          <text fg={theme().textMuted}>events</text>
+          <text fg={theme().textMuted} marginTop={1}>events</text>
           <For each={events()}>
             {(e) => (
               <text fg={theme().text} wrapMode="word">

@@ -61,3 +61,21 @@ export function fmtPrice(n?: number | null): string {
 export function isUp(n?: number): boolean {
   return (n ?? 0) >= 0
 }
+
+// F13 — recent fills can span multiple days, but the rows only carried HH:MM. Local
+// "MM/DD" (matches hhmm()'s local-time basis). NaN/empty ts → "" (no prefix).
+export function mmdd(ts?: string): string {
+  if (!ts) return ""
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return ""
+  return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`
+}
+
+// F13 — date column for a fills row: show "MM/DD " only when this row's local date
+// differs from the previous (newer) row's, else blank-pad to the same width so the
+// HH:MM column stays aligned ("MM/DD ".length === 6). Empty when ts is unusable.
+export function fillDatePrefix(ts?: string, prevTs?: string): string {
+  const cur = mmdd(ts)
+  if (!cur) return ""
+  return cur === mmdd(prevTs) ? "      " : `${cur} `
+}
