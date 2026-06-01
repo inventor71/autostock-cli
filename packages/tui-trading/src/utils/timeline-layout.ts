@@ -3,7 +3,8 @@ import type { MonitorTurn } from "../types"
 const MARKET_OPEN_MIN = 9 * 60 + 30
 const MARKET_CLOSE_MIN = 16 * 60
 
-function hhmmToMinutes(ts: string): number {
+function hhmmToMinutes(ts: string | undefined | null): number {
+  if (!ts) return 0
   const [h, m] = ts.split(":").map(Number)
   if (isNaN(h!) || isNaN(m!)) return 0
   return h! * 60 + m!
