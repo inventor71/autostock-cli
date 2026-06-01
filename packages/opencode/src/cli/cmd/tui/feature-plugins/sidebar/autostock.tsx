@@ -331,8 +331,9 @@ function View(props: { api: TuiPluginApi }) {
               const d = orderDelta(o)
               const trigStr = trig != null ? ` ${fmtPrice(trig)}` : ""
               const dStr = d != null ? `  ${fmtPct(d)}` : ""
+              const side = (o.side ?? "").toLowerCase()
               return (
-                <text fg={d != null ? pnlColor(d) : theme().text} wrapMode="word">
+                <text fg={d != null ? pnlColor(d) : side === "sell" ? theme().error : side === "buy" ? theme().success : theme().text} wrapMode="word">
                   {o.symbol ?? "?"} {orderRole(o)}
                   {trigStr}
                   {dStr}
