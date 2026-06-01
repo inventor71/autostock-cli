@@ -40,16 +40,7 @@ export function OverlayPanel(props: OverlayPanelProps) {
         evt.stopPropagation?.()
       }}
     >
-      {/* Backdrop: blocks text behind by filling every cell of the overlay area */}
-      <box
-        position="absolute"
-        left={x()}
-        top={y()}
-        width={w()}
-        height={maxH()}
-        backgroundColor="#2d2d3f"
-      />
-      {/* Content panel */}
+      {/* Content panel — backgroundColor fills the box area adaptively */}
       <box
         position="absolute"
         left={x()}
