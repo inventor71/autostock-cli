@@ -44,9 +44,6 @@
     "autostock_replace_order_by_id": "ask",
     "autostock_close_position": "ask",
     "autostock_close_all_positions": "ask",
-    // F20: Alpaca-shaped read tools — `allow`-gated (read-only, no order authority).
-    // Without these the default-deny "*" hides them and the console AI falls back to
-    // steer_read (stale snapshot), unable to look up live prices or account data.
     "autostock_get_account_info": "allow",
     "autostock_get_all_positions": "allow",
     "autostock_get_open_position": "allow",
