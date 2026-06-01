@@ -63,6 +63,7 @@ import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
 import { Sidebar, sidebarWidth } from "./sidebar"
+import { TimelineBar, useMonitorData, createOverlayStore, TurnOverlay, SymbolOverlay } from "@tui-trading/core"
 import { SubagentFooter } from "./subagent-footer.tsx"
 import { LANGUAGE_EXTENSIONS } from "@/lsp/language"
 import parsers from "../../../../../../parsers-config.ts"
@@ -218,6 +219,15 @@ export function Session() {
   })
 
   const dimensions = useTerminalDimensions()
+
+  // F22: AI collaboration timeline bar + overlays
+  const steeringDir = process.env.STEERING_DIR ?? ""
+  const monitorHooks = steeringDir
+    ? useMonitorData(steeringDir)
+    : { monitor: () => null, currentTurn: () => null, recentTurns: () => [] as any[], recentDecisions: () => [] as any[], todayCount: () => 0, todayCost: () => 0, workspaceRoot: () => "" }
+  const { monitor, currentTurn, workspaceRoot } = monitorHooks
+  const overlay = createOverlayStore()
+
   const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", "auto")
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
   const [conceal, setConceal] = createSignal(true)
@@ -1131,6 +1141,16 @@ export function Session() {
           tui: tuiConfig,
         }}
       >
+        <box flexDirection="column" flexGrow={1} minHeight={0}>
+        {/* F22: timeline bar at top */}
+        <Show when={steeringDir}>
+          <TimelineBar
+            width={dimensions().width}
+            monitor={monitor}
+            currentTurn={currentTurn}
+            onMarkerClick={(id, x, y) => overlay.openTurn(id, x, y)}
+          />
+        </Show>
         <box flexDirection="row" flexGrow={1} minHeight={0}>
           <box flexGrow={1} minHeight={0} paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1}>
             <Show when={session()}>
@@ -1305,6 +1325,33 @@ export function Session() {
             </Switch>
           </Show>
         </box>
+        </box>
+        {/* F22: overlay container */}
+        <Show when={overlay.state().type === "turn" && monitor()}>
+          <TurnOverlay
+            turnId={overlay.state().turnId!}
+            anchorX={overlay.state().anchorX}
+            anchorY={overlay.state().anchorY}
+            monitor={monitor()!}
+            termWidth={dimensions().width}
+            termHeight={dimensions().height}
+            onClose={() => overlay.close()}
+            onSymbolClick={(sym, x, y) => overlay.openSymbol(sym, x, y)}
+          />
+        </Show>
+        <Show when={overlay.state().type === "symbol" && monitor()}>
+          <SymbolOverlay
+            symbol={overlay.state().symbol!}
+            anchorX={overlay.state().anchorX}
+            anchorY={overlay.state().anchorY}
+            monitor={monitor()!}
+            steeringDir={steeringDir}
+            workspaceDir={workspaceRoot()}
+            termWidth={dimensions().width}
+            termHeight={dimensions().height}
+            onClose={() => overlay.close()}
+          />
+        </Show>
       </context.Provider>
     </PathFormatterProvider>
   )
