@@ -234,6 +234,15 @@ function View(props: { api: TuiPluginApi }) {
 
   return (
     <box>
+      {/* F26 — supervisor-mode badge. Shown ONLY when the console was launched via
+          `autostock --supervisor` (developer-only, read-only whole-codebase analysis),
+          so the operator never confuses an elevated session with a normal one. Always
+          evaluated (independent of the daemon snapshot). */}
+      <Show when={process.env.AUTOSTOCK_SUPERVISOR === "on"}>
+        <text fg={theme().warning}>
+          <b>MODE: SUPERVISOR</b> · read-only
+        </text>
+      </Show>
       {/* F5 S6: disconnect banner — always evaluated, even when there is no snapshot to show. */}
       <Show when={disconnect()}>
         <text fg={theme().text} wrapMode="word">

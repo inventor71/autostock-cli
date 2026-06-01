@@ -573,13 +573,18 @@ describe("tool.registry", () => {
       expect(ids).toContain("read")
       expect(ids).toContain("glob")
       expect(ids).toContain("grep")
+      // F26: web tools are RESTORED under lockdown (research/lookup; non-mutating to the
+      // daemon). FR-5. They survive registration; websearch is further gated per-model by
+      // webSearchEnabled() in tools().
+      expect(ids).toContain("webfetch")
+      expect(ids).toContain("websearch")
 
       // no surviving builtin is outside the read-only allowlist (custom tools = none here)
-      const allowed = new Set(["invalid", "read", "glob", "grep", "lsp"])
+      const allowed = new Set(["invalid", "read", "glob", "grep", "lsp", "webfetch", "websearch"])
       for (const id of ids) expect(allowed.has(id)).toBe(true)
 
-      // and the headline mutating/egress tools are concretely gone
-      for (const gone of ["bash", "edit", "write", "task", "webfetch", "websearch", "apply_patch"])
+      // and the headline MUTATING builtins are concretely gone (web is intentionally kept)
+      for (const gone of ["bash", "edit", "write", "task", "apply_patch"])
         expect(ids).not.toContain(gone)
     }),
   )

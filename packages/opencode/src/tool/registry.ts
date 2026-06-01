@@ -262,11 +262,18 @@ export const layer: Layer.Layer<
         })
 
         // Read-only survivors under lockdown (mirrors opencode.json's allow list).
+        // F26: web tools (fetch/search) are RESTORED under lockdown so the operator
+        // console can do general research/lookup in BOTH normal and supervisor profiles
+        // (FR-5). They are non-mutating w.r.t. the daemon. The mutating side-effect
+        // builtins (edit/write/task/patch + shell) remain ABSENT — read-only is preserved
+        // (FR-4①). websearch is further gated per-model by webSearchEnabled() in tools().
         const readOnly = [
           tool.invalid,
           tool.read,
           tool.glob,
           tool.grep,
+          tool.fetch,
+          tool.search,
           ...(flags.experimentalLspTool ? [tool.lsp] : []),
         ]
         const full = [
