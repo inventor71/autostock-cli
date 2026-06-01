@@ -2,9 +2,41 @@ export interface MonitorData {
   ts: string
   current_turn: CurrentTurn | null
   workspace_root: string | null
+  // F25: market-aware timeline metadata.
+  market?: MarketRule
+  session_et_date?: string
   turns: TurnsBlock
   decisions: MonitorDecision[]
+  interventions?: InterventionMarker[]
   log: string[]
+}
+
+// F25: market-session rule (wall-clock ET times). The TUI converts to the
+// operator's local timezone using the IANA tz, so DST is handled by Intl.
+export interface MarketRule {
+  tz: string
+  pre_open: string       // "HH:MM"
+  regular_open: string
+  regular_close: string
+  after_close: string
+}
+
+export const DEFAULT_MARKET_RULE: MarketRule = {
+  tz: "America/New_York",
+  pre_open: "04:00",
+  regular_open: "09:30",
+  regular_close: "16:00",
+  after_close: "20:00",
+}
+
+// F25: a trade-only human intervention shown on the timeline (FR-3).
+export interface InterventionMarker {
+  ts: string            // tz-aware ISO
+  et_date: string
+  verb: string
+  symbol: string | null
+  outcome: string
+  detail: string
 }
 
 export interface CurrentTurn {
@@ -22,7 +54,8 @@ export interface TurnsBlock {
 export interface MonitorTurn {
   id: string
   type: TurnType
-  ts: string
+  ts: string             // F25: full tz-aware ISO (was HH:MM)
+  et_date?: string
   cost_usd: number
   num_decisions: number
   duration_ms: number | null
@@ -51,9 +84,10 @@ export interface PositionInfo {
 }
 
 export interface OverlayState {
-  type: "turn" | "symbol" | null
+  type: "turn" | "symbol" | "intervention" | null
   turnId: string | null
   symbol: string | null
+  intervention: InterventionMarker | null
   anchorX: number
   anchorY: number
 }
