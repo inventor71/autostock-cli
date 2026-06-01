@@ -63,7 +63,7 @@ import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
 import { Sidebar, sidebarWidth } from "./sidebar"
-import { TimelineBar, useMonitorData, createOverlayStore, TurnOverlay, SymbolOverlay } from "@tui-trading/core"
+import { TimelineBar, useMonitorData, createOverlayStore, TurnOverlay, SymbolOverlay, InterventionOverlay } from "@tui-trading/core"
 import { SubagentFooter } from "./subagent-footer.tsx"
 import { LANGUAGE_EXTENSIONS } from "@/lsp/language"
 import parsers from "../../../../../../parsers-config.ts"
@@ -1149,6 +1149,10 @@ export function Session() {
             monitor={monitor}
             currentTurn={currentTurn}
             onMarkerClick={(id, x, y) => overlay.openTurn(id, x, y)}
+            onInterventionClick={(ts, x, y) => {
+              const iv = (monitor()?.interventions ?? []).find((i) => i.ts === ts)
+              if (iv) overlay.openIntervention(iv, x, y)
+            }}
           />
         </Show>
         <box flexDirection="row" flexGrow={1} minHeight={0}>
@@ -1347,6 +1351,16 @@ export function Session() {
             monitor={monitor()!}
             steeringDir={steeringDir}
             workspaceDir={workspaceRoot()}
+            termWidth={dimensions().width}
+            termHeight={dimensions().height}
+            onClose={() => overlay.close()}
+          />
+        </Show>
+        <Show when={overlay.state().type === "intervention" && overlay.state().intervention}>
+          <InterventionOverlay
+            intervention={overlay.state().intervention!}
+            anchorX={overlay.state().anchorX}
+            anchorY={overlay.state().anchorY}
             termWidth={dimensions().width}
             termHeight={dimensions().height}
             onClose={() => overlay.close()}

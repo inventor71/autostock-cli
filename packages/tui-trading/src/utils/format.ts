@@ -37,6 +37,41 @@ export function actionColor(action: string): string {
   return ACTION_COLOR[action] ?? "white"
 }
 
+// F25: human trade interventions use a distinct glyph/color from agent turns.
+export function interventionGlyph(_verb: string): string {
+  return "✚"
+}
+
+export function interventionColor(verb: string): string {
+  // Buy-ish green, sell/flatten/close red, cancels gray.
+  if (verb === "buy" || verb === "place_order") return "green"
+  if (verb.startsWith("cancel")) return "gray"
+  return "red"
+}
+
+// F25: market-phase labels/colors for the timeline (region bands + now badge).
+const PHASE_LABEL: Record<string, string> = {
+  pre: "PRE-MARKET", regular: "REGULAR", after: "AFTER-HRS", closed: "CLOSED",
+}
+const PHASE_SHORT: Record<string, string> = {
+  pre: "PRE", regular: "OPEN", after: "AFT", closed: "—",
+}
+const PHASE_COLOR: Record<string, string> = {
+  pre: "#7faaff", regular: "#5fd38d", after: "#c98bdb", closed: "gray",
+}
+export function phaseLabel(p: string): string { return PHASE_LABEL[p] ?? p }
+export function phaseShort(p: string): string { return PHASE_SHORT[p] ?? p }
+export function phaseColor(p: string): string { return PHASE_COLOR[p] ?? "white" }
+
+/** F25: format a tz-aware ISO timestamp as local HH:MM. */
+export function fmtLocalHhmm(iso: string): string {
+  if (!iso) return ""
+  const ms = Date.parse(iso)
+  if (Number.isNaN(ms)) return iso.slice(11, 16)
+  const d = new Date(ms)
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+}
+
 export function fmtCost(usd: number): string {
   return `$${usd.toFixed(2)}`
 }
