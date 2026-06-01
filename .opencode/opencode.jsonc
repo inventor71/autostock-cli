@@ -43,6 +43,25 @@
     "autostock_cancel_all_orders": "ask",
     "autostock_replace_order_by_id": "ask",
     "autostock_close_position": "ask",
-    "autostock_close_all_positions": "ask"
+    "autostock_close_all_positions": "ask",
+    // F20: Alpaca-shaped read tools — `allow`-gated (read-only, no order authority).
+    // Without these the default-deny "*" hides them and the console AI falls back to
+    // steer_read (stale snapshot), unable to look up live prices or account data.
+    "autostock_get_account_info": "allow",
+    "autostock_get_all_positions": "allow",
+    "autostock_get_open_position": "allow",
+    "autostock_get_portfolio_history": "allow",
+    "autostock_get_asset": "allow",
+    "autostock_get_all_assets": "allow",
+    "autostock_get_calendar": "allow",
+    "autostock_get_market_clock": "allow",
+    "autostock_get_stock_bars": "allow",
+    "autostock_get_stock_latest_bar": "allow",
+    "autostock_get_stock_latest_quote": "allow",
+    "autostock_get_stock_latest_trade": "allow",
+    "autostock_get_stock_quote": "allow",
+    "autostock_get_stock_snapshot": "allow",
+    "autostock_get_stock_trades": "allow",
+    "autostock_get_orders": "allow"
   }
 }
