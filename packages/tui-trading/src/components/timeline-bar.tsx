@@ -32,8 +32,8 @@ export function TimelineBar(props: TimelineBarProps) {
       <Show when={!disconnected()} fallback={
         <text fg="gray">{"  Monitor disconnected"}</text>
       }>
-        <Show when={(layout().markers.length > 0) || (props.currentTurn() !== null)} fallback={
-          <text fg="gray">{"  No turns today"}</text>
+        <Show when={!disconnected()} fallback={
+          <text fg="gray">{"  Monitor disconnected"}</text>
         }>
           {/* Row 1: tick labels */}
           <TickRow layout={layout()} width={props.width} />
@@ -92,11 +92,8 @@ function MarkerRow(props: {
       }
     }
 
-    const nowX = props.layout.nowX
-    const blinkActive = props.currentTurn && props.blinkOn
-    if (!blinkActive && nowX >= 0 && nowX < props.width - 1) {
-      chars[nowX] = "→"
-    }
+    // The now-arrow is rendered as a separate colored element above the line
+    // (see return JSX below). Keep the line character as plain dash here.
 
     const costLabel = ` ${fmtCost(props.todayCost)} `
     const costStart = props.width - costLabel.length - 1
@@ -130,7 +127,12 @@ function MarkerRow(props: {
       </For>
       {props.currentTurn && props.blinkOn && (
         <box position="absolute" left={props.layout.nowX} width={1}>
-          <text fg="green">◎</text>
+          <text fg="green"><b>◎</b></text>
+        </box>
+      )}
+      {!(props.currentTurn && props.blinkOn) && props.layout.nowX >= 0 && props.layout.nowX < props.width && (
+        <box position="absolute" left={props.layout.nowX} width={1}>
+          <text fg={props.currentTurn ? "green" : "yellow"}>▸</text>
         </box>
       )}
       <text fg="gray">{line()}</text>

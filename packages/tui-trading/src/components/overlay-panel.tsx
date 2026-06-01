@@ -40,6 +40,16 @@ export function OverlayPanel(props: OverlayPanelProps) {
         evt.stopPropagation?.()
       }}
     >
+      {/* Backdrop: blocks text behind by filling every cell of the overlay area */}
+      <box
+        position="absolute"
+        left={x()}
+        top={y()}
+        width={w()}
+        height={maxH()}
+        backgroundColor="#2d2d3f"
+      />
+      {/* Content panel */}
       <box
         position="absolute"
         left={x()}
@@ -47,6 +57,7 @@ export function OverlayPanel(props: OverlayPanelProps) {
         width={w()}
         maxHeight={maxH()}
         borderStyle="rounded"
+        backgroundColor="#2d2d3f"
         paddingLeft={1}
         paddingRight={1}
         onMouseUp={(evt: any) => evt.stopPropagation?.()}

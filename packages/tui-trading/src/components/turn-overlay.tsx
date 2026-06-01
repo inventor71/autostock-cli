@@ -25,7 +25,7 @@ export function TurnOverlay(props: TurnOverlayProps) {
     <OverlayPanel
       anchorX={props.anchorX}
       anchorY={props.anchorY}
-      width={55}
+      width={68}
       maxHeight={15}
       termWidth={props.termWidth}
       termHeight={props.termHeight}
