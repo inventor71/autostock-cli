@@ -1,7 +1,7 @@
 import { createSignal, onCleanup, createMemo, Show, For } from "solid-js"
 import type { MonitorData, CurrentTurn } from "../types"
 import { DEFAULT_MARKET_RULE } from "../types"
-import { computeLayout, phaseAt } from "../utils/timeline-layout"
+import { computeLayout, phaseAt, labelCells } from "../utils/timeline-layout"
 import { readSessionData, shiftDate } from "../hooks/use-session-data"
 import {
   markerGlyph, markerColor, interventionGlyph, interventionColor, fmtCost,
@@ -169,13 +169,14 @@ const REGION_BG: Record<string, string> = {
   after: "#3d2740",    // dim purple (after-hours)
 }
 
-// A region band: dashes with an inline label (PRE/OPEN/AFT) when there's room,
-// so the session is identifiable by text — not reliant on background color.
-function bandText(kind: string, w: number): string {
+// A region band: dashes only — the bottom "timeline background" layer. The region's
+// inline label (PRE/OPEN/AFT) is no longer baked into the band; F34 renders it as a
+// TOPMOST transparent overlay (see the label layer in MarkerRow + `labelCells`), so
+// markers/cursor can never occlude the label text. The band still carries each
+// region's bg/fg color so the session is identifiable even without the label.
+function bandText(_kind: string, w: number): string {
   if (w <= 0) return ""
-  const lbl = phaseShort(kind)
-  if (w < lbl.length + 2) return "─".repeat(w)
-  return "─" + lbl + "─".repeat(w - 1 - lbl.length)
+  return "─".repeat(w)
 }
 
 function MarkerRow(props: {
@@ -200,7 +201,8 @@ function MarkerRow(props: {
           <Show when={r.x1 > r.x0}>
             <box position="absolute" left={r.x0} width={Math.max(r.x1 - r.x0, 1)}>
               {/* Band tinted with the phase color (readable even if the terminal
-                  doesn't render bg) + an inline label so each region is named. */}
+                  doesn't render bg). Dashes only — the PRE/OPEN/AFT label is drawn
+                  by the topmost overlay layer below (F34). */}
               <text bg={REGION_BG[r.kind]} fg={phaseColor(r.kind)}>
                 {bandText(r.kind, Math.max(r.x1 - r.x0, 1))}
               </text>
@@ -252,6 +254,38 @@ function MarkerRow(props: {
           <text fg={props.currentTurn && props.blinkOn ? "green" : "yellow"}><b>┃</b></text>
         </box>
       </Show>
+      {/* F34: region labels (PRE/OPEN/AFT) as the TOPMOST layer. Each glyph is its
+          own 1-cell box with a TRANSPARENT background (no `bg` set), so the band's
+          color shows through and nothing — neither a marker nor the now cursor — can
+          occlude the label text. Painted last ⇒ on top. The `│` boundaries, markers
+          and cursor keep their existing order/position underneath (we only lift the
+          text). A click on a label cell is forwarded to whatever marker/intervention
+          sits under that exact column (topmost = last-painted wins, matching the
+          direct handlers), so a marker hidden behind a letter stays clickable.
+          The column is known at render time, so this never relies on the (screen-
+          global) event x for matching — only as the popup anchor, as the direct
+          handlers do. Live-reads props.layout so it stays correct after a date shift. */}
+      <For each={labelCells(props.layout.regions, props.width, phaseShort)}>
+        {(lc) => {
+          const lastAt = <T extends { x: number }>(arr: T[]): T | undefined => {
+            for (let i = arr.length - 1; i >= 0; i--) if (arr[i]!.x === lc.x) return arr[i]
+            return undefined
+          }
+          return (
+            <box position="absolute" left={lc.x} width={1}
+              onMouseUp={(evt: any) => {
+                // Interventions paint after markers (on top), so prefer them on a tie.
+                const iv = lastAt(props.layout.interventions)
+                if (iv) { props.onInterventionClick?.(iv.intervention.ts, evt.x ?? lc.x, 3); evt.stopPropagation?.(); return }
+                const mp = lastAt(props.layout.markers)
+                if (mp) { props.onMarkerClick(mp.turn.id, evt.x ?? lc.x, 3); evt.stopPropagation?.() }
+                // No marker under this label column → no-op (let it fall through).
+              }}>
+              <text fg={phaseColor(lc.kind)}>{lc.ch}</text>
+            </box>
+          )
+        }}
+      </For>
     </box>
   )
 }

@@ -5,7 +5,10 @@ import {
   sessionBounds,
   computeLayout,
   phaseAt,
+  labelCells,
+  type RegionSpan,
 } from "../src/utils/timeline-layout"
+import { phaseShort } from "../src/utils/format"
 import { shiftDate } from "../src/hooks/use-session-data"
 import { DEFAULT_MARKET_RULE, type MonitorTurn, type InterventionMarker } from "../src/types"
 
@@ -159,6 +162,58 @@ describe("phaseAt", () => {
   test("boundaries are half-open (open inclusive, close exclusive)", () => {
     expect(at("09:30")).toBe("regular")  // exactly open
     expect(at("16:00")).toBe("after")    // exactly close → after
+  })
+})
+
+// F34: PRE/OPEN/AFT labels are rendered as a topmost overlay via `labelCells`.
+// The placement must match the historical inline-band layout exactly (label one
+// column in from the region's left edge), so markers/cursor no longer occlude it.
+describe("labelCells", () => {
+  test("places each label one column in from its region's left edge", () => {
+    const regions: RegionSpan[] = [
+      { kind: "pre", x0: 1, x1: 30 },
+      { kind: "regular", x0: 30, x1: 70 },
+      { kind: "after", x0: 70, x1: 99 },
+    ]
+    const cells = labelCells(regions, 100, phaseShort)
+    // PRE at 2,3,4 · OPEN at 31..34 · AFT at 71,72,73
+    expect(cells.filter((c) => c.kind === "pre").map((c) => [c.x, c.ch]))
+      .toEqual([[2, "P"], [3, "R"], [4, "E"]])
+    expect(cells.filter((c) => c.kind === "regular").map((c) => [c.x, c.ch]))
+      .toEqual([[31, "O"], [32, "P"], [33, "E"], [34, "N"]])
+    expect(cells.filter((c) => c.kind === "after").map((c) => [c.x, c.ch]))
+      .toEqual([[71, "A"], [72, "F"], [73, "T"]])
+  })
+
+  test("skips a region with no room for its label (width < len + 2)", () => {
+    // OPEN needs width >= 6; give it 5.
+    const cells = labelCells([{ kind: "regular", x0: 10, x1: 15 }], 100, phaseShort)
+    expect(cells).toEqual([])
+  })
+
+  test("skips a zero/negative-width region (not drawn)", () => {
+    expect(labelCells([{ kind: "pre", x0: 20, x1: 20 }], 100, phaseShort)).toEqual([])
+    expect(labelCells([{ kind: "pre", x0: 20, x1: 10 }], 100, phaseShort)).toEqual([])
+  })
+
+  test("clips label glyphs to the bar width", () => {
+    // OPEN would occupy columns 96..99 from x0=95; barWidth 98 ⇒ keep 96,97 only.
+    const cells = labelCells([{ kind: "regular", x0: 95, x1: 130 }], 98, phaseShort)
+    expect(cells.map((c) => c.x)).toEqual([96, 97])
+    expect(cells.map((c) => c.ch)).toEqual(["O", "P"])
+  })
+
+  test("real layout: every label cell lands inside its own region span", () => {
+    const layout = computeLayout({
+      turns: [], interventions: [], barWidth: 120, etDate: "2026-06-01",
+    })
+    const cells = labelCells(layout.regions, 120, phaseShort)
+    expect(cells.length).toBeGreaterThan(0)
+    for (const c of cells) {
+      const r = layout.regions.find((rr) => rr.kind === c.kind)!
+      expect(c.x).toBeGreaterThan(r.x0)       // strictly inside (one column in)
+      expect(c.x).toBeLessThan(r.x1)
+    }
   })
 })
 

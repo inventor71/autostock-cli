@@ -100,6 +100,40 @@ export interface RegionSpan {
   x1: number
 }
 
+export interface LabelCell {
+  kind: RegionSpan["kind"]
+  x: number      // absolute timeline column of this label glyph
+  ch: string     // single label character (P/R/E, O/P/E/N, A/F/T)
+}
+
+/**
+ * F34: the per-column cells occupied by each region's inline label (PRE/OPEN/AFT).
+ * Pure geometry — mirrors the historical `bandText` placement EXACTLY (label starts
+ * one column in from the region's left edge, shown only when the region is at least
+ * `label.length + 2` wide) so the labels render at the same columns they always did,
+ * but now as a TOPMOST overlay layer (markers/cursor can no longer occlude them).
+ * `shortOf` is injected (the component passes `phaseShort`) to keep this dependency-free
+ * and unit-testable.
+ */
+export function labelCells(
+  regions: RegionSpan[],
+  barWidth: number,
+  shortOf: (kind: string) => string,
+): LabelCell[] {
+  const cells: LabelCell[] = []
+  for (const r of regions) {
+    if (r.x1 <= r.x0) continue                 // region not drawn (see <Show when={r.x1>r.x0}>)
+    const w = Math.max(r.x1 - r.x0, 1)
+    const lbl = shortOf(r.kind)
+    if (w < lbl.length + 2) continue           // no room for the inline label (matches bandText)
+    for (let i = 0; i < lbl.length; i++) {
+      const x = r.x0 + 1 + i
+      if (x >= 0 && x < barWidth) cells.push({ kind: r.kind, x, ch: lbl[i]! })
+    }
+  }
+  return cells
+}
+
 export interface TimelineLayout {
   bounds: SessionBounds
   markers: MarkerPosition[]
